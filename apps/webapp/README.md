@@ -1,22 +1,36 @@
 # Well Cinebox webapp
 
-A responsive Vite + React discovery homepage living alongside the original Rust MovieBox-Tui project in `apps/webapp`.
+The browser app is a responsive React/Vite frontend for the Rust MovieBox-Tui provider service. It includes live discovery/search, provider-aware title details, saved titles, episode/source selection, and a browser video player.
 
 ## Local development
 
+Run the API from the repository root in one terminal:
+
 ```bash
+PORT=3001 cargo run --bin wellcinebox-api
+```
+
+Run the frontend in another terminal:
+
+```bash
+cd apps/webapp
 npm ci
 npm run dev
 ```
 
-## Vercel
+Vite listens on port 3000. Its `/api` and `/health` development proxies target `http://127.0.0.1:3001`. The homepage uses the MovieBox tab-zero catalog feed; source selection lets users browse another configured provider. The app’s own SPA routes are declared in `public/manus-routes.json`.
 
-Import `tahsin112233-png/well-cinebox` in Vercel and set **Root Directory** to `apps/webapp`. The included `vercel.json` defines `npm ci`, `npm run build`, and `dist` output. Vercel's Git integration can deploy commits pushed to the selected production branch.
+## Build and hosting
 
-## Demo scope
+```bash
+npm ci
+npm run build
+```
 
-The sample collection and all artwork in this preview are for discovery UI demonstration; the app does not host, scrape, stream, or download movies/series. Playback and real availability require integration with a licensed catalog/provider and its authorized viewing links. My List is stored locally in the browser.
+The build output is `dist/`. In Manus hosting, the webapp is the static half of a hybrid deployment; the root Rust API container serves `/api/*` and `/health`, while static files and app routes are served from `apps/webapp/dist`. `npm run preview` can be used to inspect the production bundle locally after building.
 
-## Upstream relationship
+## Playback and availability
 
-The repository fork tracks `mesamirh/MovieBox-Tui` as its upstream. The root-level `.github/workflows/sync-upstream.yml` checks for upstream commits and merges them into the fork when conflict-free. A successful merge advances the branch and can trigger a Vercel deployment **if Vercel's Git integration is connected**. Upstream TUI changes do not automatically become new web features: the Rust application and this separate browser UI have different runtimes and product behavior; conflicts stop the sync for human review.
+Progressive media and browser-native HLS use the HTML video element. HLS.js and dash.js are downloaded only when the selected source is an HLS (`.m3u8`) or DASH (`.mpd`) playlist. Actual playability remains provider-, origin-, browser-, and CORS-dependent. Some browsers forbid provider request headers or cross-origin media requests; choose a different source if playback fails. Playback URLs live only in the current browser session. “My list” is stored locally and is not synced across devices.
+
+This public-source integration exposes only the provider implementations already enabled in MovieBox-Tui. The API rejects arbitrary client-supplied proxy URLs and validates provider-specific IDs. This version does not add login, a database, a media-byte proxy, subtitle forwarding, or durable user accounts.

@@ -1,10 +1,44 @@
-# Well Cinebox fork notes
+# Well Cinebox
 
-This fork adds an independently built, Vercel-ready discovery frontend under [`apps/webapp/`](apps/webapp/). It is kept separate from the upstream Rust terminal app.
+This repository is the Well Cinebox fork of [mesamirh/MovieBox-Tui](https://github.com/mesamirh/MovieBox-Tui). It keeps the original Rust terminal application and provider library, adds a hosted Rust HTTP API, and includes a responsive React/Vite browser app under [`apps/webapp/`](apps/webapp/).
 
-- **Webapp setup and Vercel deployment:** [`apps/webapp/README.md`](apps/webapp/README.md)
-- **Upstream source:** [`mesamirh/MovieBox-Tui`](https://github.com/mesamirh/MovieBox-Tui)
-- **Automated sync:** `.github/workflows/sync-upstream.yml` checks upstream hourly and on manual dispatch. A clean merge is pushed to this fork; a conflict stops without pushing and must be resolved manually.
-- **Vercel:** Import this repository and set the project root directory to `apps/webapp`. Automatic production deploys begin after Vercel Git integration is connected and the GitHub Actions workflow is enabled for this fork.
+## Local development
 
-The webapp is a discovery UI demo. It does not provide streaming, scraping, or downloading. To add real titles and play links, configure a licensed catalog/streaming provider and implement an authorized integration.
+Requirements: Rust 1.90+ and Node.js/npm. Start the Rust API from the repository root:
+
+```bash
+PORT=3001 cargo run --bin wellcinebox-api
+```
+
+In a second terminal:
+
+```bash
+cd apps/webapp
+npm ci
+npm run dev
+```
+
+Vite serves the webapp at port 3000 and proxies `/api/*` and `/health` to the API on port 3001. The homepage reads the live MovieBox tab-zero feed; search can query one source or all enabled sources. Detail pages request provider metadata and episode lists, then resolve a selected release for browser playback.
+
+## Manus hosting
+
+The Manus project serves the Vite build as static files and runs the Rust API in a container. Static output is `apps/webapp/dist`; the container health endpoint is `/health`. The browser is hosted at the project URL. The app does not require a database or private client-side credentials.
+
+The webapp can present movie and series sources returned by the existing provider layer. It uses the HTML video element for progressive streams and native HLS, loading `hls.js`/`dashjs` only when HLS/DASH playlists are selected. Direct provider playback depends on the host, browser, CORS policy, and any provider-required headers; the app reports failures and lets viewers try a different source.
+
+## API routes
+
+- `GET /api/health`, `GET /api/providers`
+- `GET /api/home?provider=moviebox&tab=0&page=1`
+- `GET /api/search?q=…&provider=all&page=1`
+- `GET /api/titles/{provider}/{id}`
+- `GET /api/streams/{provider}/{id}?season=0&episode=0`
+- `POST /api/playback` with `{ "provider", "id", "season", "episode", "releaseIndex" }`
+
+Only the providers already implemented and enabled in this fork are exposed. Provider ID checks restrict outbound source resolution; browser input cannot choose an arbitrary proxy URL. The API is public and does not implement user accounts or per-user access control.
+
+## Upstream updates
+
+`.github/workflows/sync-upstream.yml` checks upstream hourly at minute 17 and can be run manually. It merges conflict-free upstream changes into this fork; on a conflict it aborts without pushing, so maintainers can resolve the change deliberately.
+
+An upstream merge updates the GitHub fork, not the Manus project by itself. The separate Manus update handoff must import and build the compatible changes before the hosted app changes. A new Manus checkpoint only auto-deploys when the project's **Auto-publish** preference is enabled by its owner; otherwise publish the checkpoint through the dashboard. Never assume an upstream merge is already live.

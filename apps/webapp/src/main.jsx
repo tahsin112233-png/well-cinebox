@@ -1,128 +1,127 @@
-import React, { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import PlayerPage from './PlayerPage.jsx';
 import {
-  ArrowDown, ArrowLeft, ArrowRight, Bookmark, Check, ChevronDown, CircleHelp,
-  Clapperboard, Compass, Info, Menu, Play, Plus, Search, Sparkles, X,
+  ArrowLeft, ArrowRight, Bookmark, Check, ChevronDown, ChevronRight, CircleAlert,
+  Film, Info, LoaderCircle, Menu, Play, Plus, Search, SlidersHorizontal, Sparkles,
+  Tv, X
 } from 'lucide-react';
 import './styles.css';
 
-const titles = [
-  { id: 'quiet', name: 'The Quiet Between', year: 2025, kind: 'Film', runtime: '1h 48m', rating: '8.4', genres: ['Drama', 'Mystery'], image: '/images/city-rain.jpg', tone: 'teal', description: 'A late-night radio host receives a call from a voice that knows what happens next. One city. One impossible night.' },
-  { id: 'orbit', name: 'Orbit of Ashes', year: 2025, kind: 'Series', runtime: '8 episodes', rating: '9.1', genres: ['Sci-Fi', 'Adventure'], image: '/images/nebula.jpg', tone: 'violet', description: 'On the edge of a distant system, a rescue crew discovers that the stars are keeping a secret.' },
-  { id: 'blue', name: 'Blue Meridian', year: 2024, kind: 'Film', runtime: '2h 06m', rating: '8.7', genres: ['Adventure', 'Drama'], image: '/images/hero-city.jpg', tone: 'blue', description: 'A cartographer returns to the coast where her family vanished, following a map no one else can read.' },
-  { id: 'lastlight', name: 'Last Light Club', year: 2025, kind: 'Series', runtime: '6 episodes', rating: '8.2', genres: ['Thriller', 'Mystery'], image: '/images/night-road.jpg', tone: 'amber', description: 'Four strangers inherit a closed cinema and the stories hidden in its last reel.' },
-  { id: 'wild', name: 'A Wilder Sky', year: 2024, kind: 'Film', runtime: '1h 54m', rating: '8.5', genres: ['Adventure', 'Family'], image: '/images/hero-city.jpg', tone: 'green', description: 'A young astronomer and her grandfather set out to find the darkest sky in the country.' },
-  { id: 'echo', name: 'Echoes of Tomorrow', year: 2025, kind: 'Series', runtime: '10 episodes', rating: '9.0', genres: ['Sci-Fi', 'Drama'], image: '/images/nebula.jpg', tone: 'pink', description: 'A small research team listens to signals arriving from a future that may never happen.' },
-  { id: 'paper', name: 'Paper Moons', year: 2023, kind: 'Film', runtime: '1h 42m', rating: '7.9', genres: ['Romance', 'Drama'], image: '/images/city-rain.jpg', tone: 'rose', description: 'Two artists leave anonymous notes in the same bookshop and slowly redraw each other’s world.' },
-  { id: 'north', name: 'North of Nowhere', year: 2024, kind: 'Series', runtime: '7 episodes', rating: '8.6', genres: ['Mystery', 'Thriller'], image: '/images/night-road.jpg', tone: 'cyan', description: 'A winter storm closes a mountain town, and an old disappearance starts happening all over again.' },
-  { id: 'after', name: 'After the Blue Hour', year: 2023, kind: 'Film', runtime: '1h 37m', rating: '8.1', genres: ['Drama', 'Romance'], image: '/images/hero-city.jpg', tone: 'blue', description: 'One evening changes the route home for two people who thought they already knew where they were going.' },
-  { id: 'signal', name: 'The Far Signal', year: 2025, kind: 'Series', runtime: '5 episodes', rating: '8.8', genres: ['Sci-Fi', 'Mystery'], image: '/images/nebula.jpg', tone: 'purple', description: 'A remote listening station picks up a message that seems to answer questions before they are asked.' },
+const PROVIDERS = [
+  { value: 'all', label: 'All sources' },
+  { value: 'moviebox', label: 'MovieBox' },
+  { value: 'fourkhdhub', label: '4KHDHub' },
+  { value: 'dramachi', label: 'DramaChi' },
+  { value: 'bdix_circleftp', label: 'BDIX CircleFTP' },
+  { value: 'bdix_dhakaflix', label: 'BDIX DhakaFlix' },
 ];
-const categories = ['For you', 'Films', 'Series', 'Drama', 'Sci-Fi', 'Mystery', 'Adventure'];
+const PROVIDER_LABELS = Object.fromEntries(PROVIDERS.map((provider) => [provider.value, provider.label]));
+const FALLBACK_ART = ['/images/hero-city.jpg', '/images/city-rain.jpg', '/images/night-road.jpg', '/images/nebula.jpg'];
 
-function Brand() {
-  return <a className="brand" href="#home" aria-label="Well Cinebox home"><span className="brand-mark"><i/><i/><i/></span><span>well<span className="brand-light">cinebox</span></span></a>;
+function apiUrl(path) { return path; }
+function providerLabel(value) { return PROVIDER_LABELS[value] || value || 'Catalog'; }
+function firstValue(...values) { return values.find((value) => value !== undefined && value !== null && value !== '') ?? ''; }
+function asArray(value) { return Array.isArray(value) ? value : []; }
+function formatId(item) {
+  const raw = item?.id ?? item?.title_id ?? item?.slug ?? item?.url;
+  if (raw && typeof raw === 'object') return String(firstValue(raw.id, raw.value, raw.slug));
+  return raw === undefined || raw === null ? '' : String(raw);
 }
-function Poster({ item, onOpen, saved, onSave }) {
-  return <article className="poster-card">
-    <button className={`poster-art art-${item.tone}`} onClick={() => onOpen(item)} aria-label={`View ${item.name} details`}>
-      <img src={item.image} alt="" loading="lazy" />
-      <span className="art-shade"/><span className="poster-mark">W<span>•</span>C</span>
-      <span className="poster-copy"><small>{item.kind === 'Series' ? 'WELL ORIGINAL SERIES' : 'WELL ORIGINAL FILM'}</small><b>{item.name}</b></span>
-      <span className="play-float"><Play size={15} fill="currentColor"/></span>
-    </button>
-    <div className="card-caption"><div><h3>{item.name}</h3><p>{item.year}<span>·</span>{item.kind}<span>·</span>{item.runtime}</p></div>
-      <button className={`save-mini ${saved ? 'is-saved' : ''}`} onClick={() => onSave(item.id)} aria-label={saved ? `Remove ${item.name} from My List` : `Add ${item.name} to My List`}>{saved ? <Check size={16}/> : <Plus size={17}/>}</button>
-    </div>
-  </article>;
+function isSeries(item) {
+  const value = String(firstValue(item?.type, item?.kind, item?.media_type, item?.content_type)).toLowerCase();
+  return value.includes('series') || value.includes('tv') || value.includes('show') || asArray(item?.seasons).length > 0;
 }
-function Shelf({ title, subtitle, items, saved, onOpen, onSave, onBrowse }) {
-  const ref = useRef(null);
-  return <section className="shelf">
-    <div className="shelf-head"><div><h2>{title}<ArrowRight size={19}/></h2>{subtitle && <p>{subtitle}</p>}</div>
-      <div className="shelf-actions"><button className="text-button" onClick={onBrowse}>Explore all <ArrowRight size={15}/></button><button aria-label="Scroll titles left" onClick={() => ref.current?.scrollBy({ left: -500, behavior: 'smooth' })}><ArrowLeft size={17}/></button><button aria-label="Scroll titles right" onClick={() => ref.current?.scrollBy({ left: 500, behavior: 'smooth' })}><ArrowRight size={17}/></button></div>
-    </div>
-    <div className="poster-row" ref={ref}>{items.map(item => <Poster key={item.id} item={item} onOpen={onOpen} saved={saved.includes(item.id)} onSave={onSave}/>)}</div>
-  </section>;
+function normalizeItem(raw, index = 0, providerHint = '') {
+  if (!raw) return null;
+  const source = raw.item || raw.title || raw;
+  const provider = firstValue(source.provider, source.source, source.provider_id, source.id?.provider, providerHint, 'moviebox');
+  const id = formatId(source) || `${provider}-${index}`;
+  const title = firstValue(source.title, source.name, source.original_title, source.label);
+  if (!title) return null;
+  return { ...source, id, provider, title,
+    description: firstValue(source.description, source.overview, source.synopsis),
+    year: firstValue(source.year, source.release_year, source.releaseDate, source.release_date),
+    genres: asArray(firstValue(source.genres, source.genre)).filter(Boolean),
+    type: firstValue(source.type, source.kind, source.media_type, source.content_type, isSeries(source) ? 'series' : 'movie'),
+    poster: firstValue(source.poster, source.poster_url, source.cover, source.cover_url, source.image, source.image_url, source.thumbnail, source.thumbnail_url),
+    backdrop: firstValue(source.backdrop, source.backdrop_url, source.banner, source.banner_url, source.hero, source.hero_url),
+    seasons: asArray(source.seasons), episodes: asArray(source.episodes) };
 }
-function App() {
-  const [category, setCategory] = useState('For you');
-  const [search, setSearch] = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [saved, setSaved] = useState(() => { try { return JSON.parse(localStorage.getItem('wellcinebox-list') || '[]'); } catch { return []; } });
-  const [selected, setSelected] = useState(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [notice, setNotice] = useState('');
-  const matching = useMemo(() => titles.filter(item => {
-    const genreMatch = category === 'For you' || category === 'My List' || category === 'Films' && item.kind === 'Film' || category === 'Series' && item.kind === 'Series' || item.genres.includes(category);
-    const searchMatch = `${item.name} ${item.kind} ${item.genres.join(' ')}`.toLowerCase().includes(search.toLowerCase());
-    return genreMatch && searchMatch;
-  }), [category, search]);
-  const saveTitle = (id) => setSaved(prev => {
-    const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
-    localStorage.setItem('wellcinebox-list', JSON.stringify(next));
-    return next;
-  });
-  const filteredList = category === 'My List' ? matching.filter(item => saved.includes(item.id)) : matching;
-  const showNotice = (message) => { setNotice(message); window.setTimeout(() => setNotice(''), 3800); };
-  const browse = (name) => { setCategory(name); setSearch(''); window.scrollTo({ top: 450, behavior: 'smooth' }); };
-  const shelves = category === 'For you' ? [
-    { title: 'Well originals', subtitle: 'Fresh stories, made for the long way home.', items: matching.slice(0, 6) },
-    { title: 'Keep the lights on', subtitle: 'A little mystery looks good after dark.', items: titles.filter(x => x.genres.includes('Mystery') && matching.includes(x)) },
-    { title: 'Worlds to get lost in', subtitle: 'Big skies. Bigger questions.', items: titles.filter(x => x.genres.includes('Sci-Fi') && matching.includes(x)) },
-  ] : [{ title: category === 'My List' ? 'Your saved stories' : `${category} to settle into`, subtitle: `${filteredList.length} ${filteredList.length === 1 ? 'story' : 'stories'} ready to discover.`, items: filteredList }];
-  return <div id="home" className="app-shell">
-    <header className="topbar">
-      <button className="mobile-menu icon-btn" aria-label="Open menu" onClick={() => setMenuOpen(!menuOpen)}><Menu size={21}/></button>
-      <Brand/>
-      <nav className={`main-nav ${menuOpen ? 'nav-open' : ''}`} aria-label="Main navigation">
-        <button className={category === 'For you' ? 'nav-link active' : 'nav-link'} onClick={() => browse('For you')}><Compass size={16}/> Discover</button>
-        <button className={category === 'Films' ? 'nav-link active' : 'nav-link'} onClick={() => browse('Films')}>Films</button>
-        <button className={category === 'Series' ? 'nav-link active' : 'nav-link'} onClick={() => browse('Series')}>Series</button>
-        <button className={category === 'My List' ? 'nav-link active' : 'nav-link'} onClick={() => browse('My List')}>My List <span className="list-count">{saved.length || ''}</span></button>
-      </nav>
-      <div className="top-actions">
-        <form className={`search-box ${searchOpen ? 'search-open' : ''}`} onSubmit={e => { e.preventDefault(); document.querySelector('.shelf')?.scrollIntoView({ behavior: 'smooth' }); }}>
-          <button type="button" className="icon-btn" aria-label="Search titles" onClick={() => { setSearchOpen(!searchOpen); setTimeout(() => document.querySelector('.search-box input')?.focus(), 50); }}><Search size={19}/></button>
-          {searchOpen && <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Titles, genres…" aria-label="Search titles and genres"/>}
-          {searchOpen && <button type="button" className="close-search" onClick={() => { setSearchOpen(false); setSearch(''); }} aria-label="Close search"><X size={16}/></button>}
-        </form>
-        <button className="profile" aria-label="Your profile" onClick={() => showNotice('Your personal space. My List is saved on this device.')}>W</button>
-      </div>
-    </header>
-
-    <main>
-      <section className="hero" aria-label="Featured story">
-        <div className="hero-image"/><div className="hero-vignette"/>
-        <div className="hero-content">
-          <div className="eyebrow"><Sparkles size={14}/> WELL CINEBOX ORIGINAL <span className="eyebrow-line"/></div>
-          <p className="hero-kicker">A new limited series</p>
-          <h1>The Quiet<br/><em>Between</em></h1>
-          <p className="hero-desc">Somewhere between the last train and the first light, a city begins to tell the truth.</p>
-          <div className="hero-meta"><span>2025</span><i/> <span>Drama</span><i/> <span>Mystery</span><i/> <span className="quality">4K</span><span className="meta-score">★ 8.4</span></div>
-          <div className="hero-ctas"><button className="primary-cta" onClick={() => setSelected(titles[0])}><Play size={17} fill="currentColor"/> Explore title</button><button className="secondary-cta" onClick={() => setSelected(titles[0])}><Info size={18}/> More details</button></div>
-          <p className="hero-note"><span className="live-dot"/> Curated for your kind of night</p>
-        </div>
-        <div className="hero-bottom"><span>01 <i/> 03</span><div className="hero-progress"><b/></div><span>FEATURED</span></div>
-        <button className="hero-down" aria-label="Scroll to collection" onClick={() => document.querySelector('.collections')?.scrollIntoView({ behavior: 'smooth' })}><ArrowDown size={17}/></button>
-      </section>
-
-      <section className="collections">
-        <div className="welcome-row"><div><p className="section-overline">YOUR NEXT GOOD STORY</p><h2>Stay for a while.</h2><p className="welcome-sub">A handpicked corner of cinema, made for the way you watch.</p></div>
-          <button className="continue-card" onClick={() => setSelected(titles[1])}><span className="continue-icon"><Clapperboard size={18}/></span><span><small>TONIGHT'S PICK</small><b>Orbit of Ashes</b><em>Start with episode one</em></span><Play size={18} fill="currentColor"/></button>
-        </div>
-        <div className="category-rail" role="tablist" aria-label="Browse by category">{categories.map(name => <button key={name} role="tab" aria-selected={category === name} className={category === name ? 'chip selected' : 'chip'} onClick={() => { setCategory(name); setSearch(''); }}>{name}</button>)}{saved.length > 0 && <button role="tab" aria-selected={category === 'My List'} className={category === 'My List' ? 'chip selected' : 'chip'} onClick={() => setCategory('My List')}><Bookmark size={14}/> My List</button>}</div>
-        {search && <div className="search-summary"><Search size={15}/><span>Showing matches for <b>“{search}”</b></span><button onClick={() => setSearch('')}>Clear</button></div>}
-        {shelves.map((shelf, i) => <Shelf key={`${category}-${shelf.title}`} title={shelf.title} subtitle={shelf.subtitle} items={shelf.items} saved={saved} onOpen={setSelected} onSave={saveTitle} onBrowse={() => browse(category === 'For you' ? categories[(i + 2) % categories.length] : category)}/>)}
-        {category !== 'For you' && filteredList.length === 0 && <div className="empty-state"><span><Bookmark size={24}/></span><h3>{category === 'My List' ? 'Your list is still yours to make.' : 'Nothing in this frame — yet.'}</h3><p>{category === 'My List' ? 'Save a story with the plus button and it will be here next time.' : 'Try another category or clear your search to keep exploring.'}</p><button className="secondary-cta" onClick={() => browse('For you')}>Back to Discover <ArrowRight size={16}/></button></div>}
-      </section>
-      <section className="closing-banner"><div className="closing-art"/><div><span className="section-overline">GOOD STORIES FIND THEIR WAY</span><h2>Make room for<br/><em>one more episode.</em></h2><p>Your next favorite is a little closer than you think.</p></div><button className="secondary-cta" onClick={() => browse('For you')}>See what’s on <ArrowRight size={16}/></button></section>
-    </main>
-
-    <footer><Brand/><p>Stories worth staying in for.</p><div className="footer-links"><button onClick={() => showNotice('This preview is a discovery experience; licensed viewing integrations are not connected yet.')}>About</button><button onClick={() => showNotice('Demo collection. Connect a licensed content catalog to publish real availability.')}>Content sources</button><button onClick={() => showNotice('This demo uses locally stored preferences only. No account or tracking is set up.')}>Privacy</button></div><span className="copyright">© 2025 Well Cinebox <i/> An independent discovery experience</span></footer>
-    {selected && <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) setSelected(null); }} role="presentation"><section className="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detail-title"><button className="modal-close" onClick={() => setSelected(null)} aria-label="Close details"><X size={20}/></button><div className="modal-art"><img src={selected.image} alt=""/><div/><span className="poster-mark">W<span>•</span>C</span></div><div className="modal-body"><span className="section-overline">WELL CINEBOX {selected.kind === 'Series' ? 'SERIES' : 'FILM'}</span><h2 id="detail-title">{selected.name}</h2><div className="hero-meta"><span>{selected.year}</span><i/><span>{selected.kind}</span><i/><span>{selected.runtime}</span><i/><span className="meta-score">★ {selected.rating}</span></div><p>{selected.description}</p><div className="tag-row">{selected.genres.map(g => <span key={g}>{g}</span>)}</div><div className="modal-buttons"><button className="primary-cta" onClick={() => showNotice('This is a discovery preview. Add your licensed streaming/catalog provider to enable playback.') }><Play size={17} fill="currentColor"/> Preview details</button><button className="secondary-cta" onClick={() => saveTitle(selected.id)}>{saved.includes(selected.id) ? <Check size={17}/> : <Plus size={17}/>} {saved.includes(selected.id) ? 'In My List' : 'My List'}</button></div><div className="legal-note"><CircleHelp size={15}/> Availability and viewing links will appear when a licensed provider is connected.</div></div></section></div>}
-    {notice && <div className="toast" role="status"><Info size={16}/>{notice}<button onClick={() => setNotice('')} aria-label="Dismiss"><X size={15}/></button></div>}
-  </div>;
+function normalizeItems(payload, providerHint = '') {
+  return asArray(payload?.items ?? payload?.results ?? payload).map((item, index) => normalizeItem(item, index, providerHint)).filter(Boolean);
 }
+function artFor(item, index = 0, wide = false) { return (wide ? firstValue(item?.backdrop, item?.poster) : firstValue(item?.poster, item?.backdrop)) || FALLBACK_ART[index % FALLBACK_ART.length]; }
+function savedKey(item) { return `${item.provider}:${item.id}`; }
+function readSaved() { try { return JSON.parse(localStorage.getItem('wellcinebox:saved') || '[]'); } catch { return []; } }
 
-createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);
+function useFetchJson(url, enabled = true) {
+  const [state, setState] = useState({ loading: enabled, error: '', data: null });
+  useEffect(() => {
+    let active = true;
+    if (!enabled) { setState({ loading: false, error: '', data: null }); return undefined; }
+    setState({ loading: true, error: '', data: null });
+    fetch(apiUrl(url), { headers: { Accept: 'application/json' } })
+      .then(async (response) => { const body = await response.json().catch(() => null); if (!response.ok) throw new Error(body?.error || body?.message || `Request failed (${response.status})`); return body; })
+      .then((data) => active && setState({ loading: false, error: '', data }))
+      .catch((error) => active && setState({ loading: false, error: error.message || 'Could not reach the catalog.', data: null }));
+    return () => { active = false; };
+  }, [url, enabled]);
+  return state;
+}
+function useRoute() {
+  const parse = useCallback(() => {
+    const path = window.location.pathname.replace(/\/+$/, '') || '/'; const params = new URLSearchParams(window.location.search);
+    if (path === '/search') return { kind: 'search', query: params.get('q') || '', provider: params.get('provider') || 'all' };
+    if (path === '/saved') return { kind: 'saved' };
+    const match = path.match(/^\/title\/([^/]+)\/([^/]+)$/); if (match) return { kind: 'title', provider: decodeURIComponent(match[1]), id: decodeURIComponent(match[2]) };
+    const playMatch = path.match(/^\/play\/([^/]+)\/([^/]+)$/); if (playMatch) return { kind: 'play', provider: decodeURIComponent(playMatch[1]), id: decodeURIComponent(playMatch[2]), season: Number(params.get('season') || 0), episode: Number(params.get('episode') || 0) };
+    return { kind: 'home' };
+  }, []);
+  const [route, setRoute] = useState(parse);
+  useEffect(() => { const onPop = () => setRoute(parse()); window.addEventListener('popstate', onPop); return () => window.removeEventListener('popstate', onPop); }, [parse]);
+  const navigate = useCallback((path) => { window.history.pushState({}, '', path); setRoute(parse()); window.scrollTo({ top: 0, behavior: 'smooth' }); }, [parse]);
+  return [route, navigate];
+}
+function Brand() { return <button className="brand" onClick={() => { window.history.pushState({}, '', '/'); window.dispatchEvent(new PopStateEvent('popstate')); }} aria-label="Well Cinebox home"><span className="brand-mark"><span /></span><span>well <b>cinebox</b></span></button>; }
+function Header({ route, navigate, onSearch }) {
+  const [menuOpen, setMenuOpen] = useState(false); const [searchOpen, setSearchOpen] = useState(route.kind === 'search'); const [value, setValue] = useState(route.kind === 'search' ? route.query : '');
+  useEffect(() => { if (route.kind === 'search') { setSearchOpen(true); setValue(route.query); } }, [route]);
+  const submit = (event) => { event.preventDefault(); const query = value.trim(); if (query) onSearch(query); }; const go = (path) => { setMenuOpen(false); navigate(path); };
+  return <header className="topbar"><Brand /><nav className={menuOpen ? 'main-nav nav-open' : 'main-nav'} aria-label="Primary navigation"><button className={route.kind === 'home' ? 'nav-link active' : 'nav-link'} onClick={() => go('/')}>Discover</button><button className={route.kind === 'saved' ? 'nav-link active' : 'nav-link'} onClick={() => go('/saved')}><Bookmark size={15} /> My list</button></nav><div className="top-actions"><form className={searchOpen ? 'search-box search-open' : 'search-box'} onSubmit={submit} role="search"><button type="button" className="icon-button" aria-label={searchOpen ? 'Close search' : 'Open search'} onClick={() => { setSearchOpen((open) => !open); if (!searchOpen) setTimeout(() => document.querySelector('.search-box input')?.focus(), 0); }}><Search size={18} /></button>{searchOpen && <input value={value} onChange={(event) => setValue(event.target.value)} placeholder="Search titles" aria-label="Search titles" />}{searchOpen && value && <button type="button" className="search-clear" aria-label="Clear search" onClick={() => setValue('')}><X size={14} /></button>}</form><button className="menu-button icon-button" aria-label="Toggle navigation" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)}><Menu size={19} /></button></div></header>;
+}
+function Status({ loading, error, emptyTitle = 'Nothing here yet.', emptyBody = 'The catalog did not return any titles.' }) {
+  if (loading) return <div className="state-card"><LoaderCircle className="spin" size={22} /><span>Connecting to the catalog…</span></div>;
+  if (error) return <div className="state-card error-state"><CircleAlert size={22} /><div><strong>Catalog unavailable</strong><span>{error}</span><small>Try again in a moment, or choose another source.</small></div></div>;
+  return <div className="state-card empty-state"><Film size={22} /><div><strong>{emptyTitle}</strong><span>{emptyBody}</span></div></div>;
+}
+function ItemCard({ item, index, saved, onOpen, onSave }) {
+  const isSaved = saved.some((savedItem) => savedKey(savedItem) === savedKey(item));
+  return <article className="title-card"><button className="poster-button" onClick={() => onOpen(item)} aria-label={`Open ${item.title}`}><img src={artFor(item, index)} alt="" loading="lazy" onError={(event) => { event.currentTarget.src = FALLBACK_ART[index % FALLBACK_ART.length]; }} /><span className="poster-shade" /><span className="poster-badge">{isSeries(item) ? 'SERIES' : 'FILM'}</span><span className="poster-play"><Play size={17} fill="currentColor" /></span></button><div className="card-meta"><button className="card-title" onClick={() => onOpen(item)}>{item.title}</button><button className={isSaved ? 'save-button saved' : 'save-button'} onClick={() => onSave(item)} aria-label={isSaved ? `Remove ${item.title} from My list` : `Save ${item.title} to My list`}>{isSaved ? <Check size={14} /> : <Plus size={14} />}</button><p>{item.year || 'Year n/a'} <i /> {providerLabel(item.provider)}</p></div></article>;
+}
+function Rail({ title, eyebrow, items, saved, onOpen, onSave }) { if (!items.length) return null; return <section className="rail"><div className="rail-head"><div><p className="eyebrow">{eyebrow}</p><h2>{title}</h2></div></div><div className="poster-row">{items.map((item, index) => <ItemCard key={savedKey(item)} item={item} index={index} saved={saved} onOpen={onOpen} onSave={onSave} />)}</div></section>; }
+function Home({ navigate, saved, onSave }) {
+  const [provider, setProvider] = useState('moviebox'); const [filter, setFilter] = useState('all'); const home = useFetchJson(`/api/home?provider=${encodeURIComponent(provider)}&tab=0&page=1`); const items = useMemo(() => normalizeItems(home.data?.items, home.data?.provider || provider), [home.data, provider]); const filtered = useMemo(() => filter === 'all' ? items : items.filter((item) => filter === 'series' ? isSeries(item) : !isSeries(item)), [items, filter]); const hero = filtered[0] || items[0]; const series = filtered.filter(isSeries).slice(0, 12); const films = filtered.filter((item) => !isSeries(item)).slice(0, 12); const open = (item) => navigate(`/title/${encodeURIComponent(item.provider)}/${encodeURIComponent(item.id)}`);
+  return <main>{hero ? <section className="hero"><img className="hero-image" src={artFor(hero, 0, true)} alt="" onError={(event) => { event.currentTarget.src = '/images/hero-city.jpg'; }} /><div className="hero-gradient" /><div className="hero-content"><p className="eyebrow"><Sparkles size={13} /> LIVE FROM {providerLabel(hero.provider).toUpperCase()}</p><h1>{hero.title}</h1><div className="hero-meta"><span>{hero.year || 'New arrival'}</span><i /><span>{isSeries(hero) ? 'Series' : 'Movie'}</span>{hero.genres[0] && <><i /><span>{hero.genres[0]}</span></>}</div>{hero.description && <p className="hero-description">{hero.description}</p>}<div className="hero-actions"><button className="primary-button" onClick={() => open(hero)}><Play size={17} fill="currentColor" /> Explore title</button><button className="ghost-button" onClick={() => onSave(hero)}>{saved.some((item) => savedKey(item) === savedKey(hero)) ? <Check size={16} /> : <Plus size={16} />} My list</button></div></div><div className="hero-index"><b>01</b><span> / {String(Math.max(items.length, 1)).padStart(2, '0')}</span></div></section> : <section className="hero hero-empty"><div className="hero-content"><p className="eyebrow"><Sparkles size={13} /> WELL CINEBOX</p><h1>Stories worth staying in for.</h1><p className="hero-description">Your catalog will appear here once a provider is available.</p></div></section>}<section className="content-shell"><div className="section-intro"><div><p className="eyebrow">THE WELL CINEBOX EDIT</p><h2>Find your next<br /><em>good story.</em></h2></div><div className="catalog-tools"><label htmlFor="home-provider">Source</label><div className="select-wrap"><SlidersHorizontal size={14} /><select id="home-provider" value={provider} onChange={(event) => setProvider(event.target.value)}>{PROVIDERS.filter((option) => option.value !== 'all').map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><ChevronDown size={15} /></div></div></div><div className="filter-tabs" role="tablist" aria-label="Filter catalog"><button className={filter === 'all' ? 'filter-tab active' : 'filter-tab'} onClick={() => setFilter('all')} role="tab" aria-selected={filter === 'all'}>Everything <span>{items.length}</span></button><button className={filter === 'movie' ? 'filter-tab active' : 'filter-tab'} onClick={() => setFilter('movie')} role="tab" aria-selected={filter === 'movie'}><Film size={15} /> Films <span>{items.filter((item) => !isSeries(item)).length}</span></button><button className={filter === 'series' ? 'filter-tab active' : 'filter-tab'} onClick={() => setFilter('series')} role="tab" aria-selected={filter === 'series'}><Tv size={15} /> Series <span>{items.filter(isSeries).length}</span></button></div>{home.loading || home.error ? <Status loading={home.loading} error={home.error} /> : !filtered.length ? <Status emptyTitle="No titles for this filter." emptyBody="Try another type or switch to a different source." /> : <><Rail title="Fresh from the catalog" eyebrow="JUST IN" items={filtered.slice(0, 12)} saved={saved} onOpen={open} onSave={onSave} />{series.length > 0 && <Rail title="Series with room to stay" eyebrow="LONG-FORM" items={series} saved={saved} onOpen={open} onSave={onSave} />}{films.length > 0 && <Rail title="Movie night, sorted" eyebrow="FEATURED FILMS" items={films} saved={saved} onOpen={open} onSave={onSave} />}</>}</section></main>;
+}
+function SearchPage({ route, navigate, saved, onSave }) {
+  const [provider, setProvider] = useState(route.provider || 'all'); const search = useFetchJson(`/api/search?q=${encodeURIComponent(route.query)}&provider=${encodeURIComponent(provider)}&page=1`, Boolean(route.query)); const items = normalizeItems(search.data?.items, search.data?.provider || provider); const open = (item) => navigate(`/title/${encodeURIComponent(item.provider)}/${encodeURIComponent(item.id)}`);
+  return <main className="page-shell"><div className="page-heading"><div><p className="eyebrow">SEARCH RESULTS</p><h1>Results for <em>“{route.query}”</em></h1><p className="muted">{search.loading ? 'Looking across the catalog…' : `${items.length} ${items.length === 1 ? 'title' : 'titles'} found`}</p></div><div className="catalog-tools"><label htmlFor="search-provider">Source</label><div className="select-wrap"><SlidersHorizontal size={14} /><select id="search-provider" value={provider} onChange={(event) => setProvider(event.target.value)}>{PROVIDERS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><ChevronDown size={15} /></div></div></div>{search.loading || search.error ? <Status loading={search.loading} error={search.error} /> : !items.length ? <Status emptyTitle="No matching titles." emptyBody="Try a shorter search or another provider." /> : <div className="search-grid">{items.map((item, index) => <ItemCard key={savedKey(item)} item={item} index={index} saved={saved} onOpen={open} onSave={onSave} />)}</div>}</main>;
+}
+function SavedPage({ navigate, saved, onSave }) { return <main className="page-shell"><div className="page-heading"><div><p className="eyebrow">YOUR SHELF</p><h1>My <em>list.</em></h1><p className="muted">Saved in this browser, ready when you are.</p></div><Bookmark className="heading-icon" size={48} /></div>{saved.length ? <div className="search-grid">{saved.map((item, index) => <ItemCard key={savedKey(item)} item={item} index={index} saved={saved} onOpen={(selected) => navigate(`/title/${encodeURIComponent(selected.provider)}/${encodeURIComponent(selected.id)}`)} onSave={onSave} />)}</div> : <Status emptyTitle="Your list is waiting." emptyBody="Use the plus button on any title to save it here." />}</main>; }
+function DetailPage({ route, navigate, saved, onSave }) {
+  const details = useFetchJson(`/api/titles/${encodeURIComponent(route.provider)}/${encodeURIComponent(route.id)}`); const item = normalizeItem(details.data, 0, route.provider); const [season, setSeason] = useState(0); const [episode, setEpisode] = useState(0); const [streamOpen, setStreamOpen] = useState(false); const streams = useFetchJson(`/api/streams/${encodeURIComponent(route.provider)}/${encodeURIComponent(route.id)}?season=${season}&episode=${episode}`, streamOpen && Boolean(item));
+  useEffect(() => { setSeason(0); setEpisode(0); setStreamOpen(false); }, [route.provider, route.id]); const seasons = asArray(item?.seasons); const seasonData = seasons[season] || {}; const episodes = asArray(seasonData.episodes ?? (season === 0 ? item?.episodes : [])); const releases = asArray(streams.data?.releases); const open = () => setStreamOpen(true); const isSaved = item && saved.some((savedItem) => savedKey(savedItem) === savedKey(item));
+  return <main className="detail-page">{details.loading || details.error ? <Status loading={details.loading} error={details.error} /> : item ? <><section className="detail-hero"><img src={artFor(item, 0, true)} alt="" onError={(event) => { event.currentTarget.src = '/images/night-road.jpg'; }} /><div className="detail-overlay" /><button className="back-button" onClick={() => navigate('/')}><ArrowLeft size={17} /> Back to discovery</button><div className="detail-heading"><p className="eyebrow">{providerLabel(item.provider)} <i /> {isSeries(item) ? 'SERIES' : 'FILM'}</p><h1>{item.title}</h1><div className="hero-meta"><span>{item.year || 'Year n/a'}</span><i /><span>{item.genres.join(' · ') || 'Genre n/a'}</span></div></div></section><section className="detail-body"><div className="detail-copy"><p className="eyebrow">ABOUT THIS TITLE</p><p className="description">{item.description || 'This title does not have a description from the provider yet.'}</p><div className="detail-actions"><button className="primary-button" onClick={open}><Play size={17} fill="currentColor" /> {isSeries(item) ? 'Choose episode' : 'Find a source'}</button><button className="ghost-button dark" onClick={() => onSave(item)}>{isSaved ? <Check size={16} /> : <Plus size={16} />} {isSaved ? 'In my list' : 'Save title'}</button></div></div><aside className="detail-facts"><span><b>Provider</b>{providerLabel(item.provider)}</span><span><b>Format</b>{isSeries(item) ? 'Series' : 'Movie'}</span><span><b>Genres</b>{item.genres.join(', ') || 'Not listed'}</span></aside></section>{isSeries(item) && <section className="episode-panel"><div className="episode-head"><div><p className="eyebrow">WATCH YOUR WAY</p><h2>Pick a chapter.</h2></div><div className="season-picker"><label htmlFor="season">Season</label><select id="season" value={season} onChange={(event) => { setSeason(Number(event.target.value)); setEpisode(0); setStreamOpen(false); }}>{seasons.map((entry, index) => <option value={index} key={index}>{entry.name || entry.title || `Season ${index + 1}`}</option>)}</select><ChevronDown size={15} /></div></div>{episodes.length ? <div className="episode-grid">{episodes.map((entry, index) => <button className={episode === index && streamOpen ? 'episode active' : 'episode'} key={entry.id || index} onClick={() => { setEpisode(index); setStreamOpen(true); }}><span>{String(index + 1).padStart(2, '0')}</span><b>{entry.title || entry.name || `Episode ${index + 1}`}</b><small>{entry.description || 'Open episode sources'}</small><ArrowRight size={15} /></button>)}</div> : <Status emptyTitle="Episodes are not listed." emptyBody="The provider did not return episode data for this season." />}</section>}{streamOpen && <SourceChooser streams={streams} releases={releases} item={item} season={season} episode={episode} navigate={navigate} />}</> : null}</main>;
+}
+function SourceChooser({ streams, releases, item, season, episode, navigate }) {
+  const [selected, setSelected] = useState(0); const [starting, setStarting] = useState(false); const [error, setError] = useState('');
+  const start = async () => { setStarting(true); setError(''); try { const response = await fetch('/api/playback', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ provider: item.provider, id: item.id, season, episode, releaseIndex: selected }) }); const body = await response.json().catch(() => null); if (!response.ok) throw new Error(body?.error || body?.message || `Playback failed (${response.status})`); if (!body?.url) throw new Error('The provider did not return a playable URL.'); navigate(`/play/${encodeURIComponent(item.provider)}/${encodeURIComponent(item.id)}?season=${season}&episode=${episode}&release=${selected}`); sessionStorage.setItem('wellcinebox:playback', JSON.stringify({ ...body, title: item.title, season, episode, releaseIndex: selected })); } catch (playbackError) { setError(playbackError.message || 'Could not start playback.'); } finally { setStarting(false); } };
+  return <section className="source-panel"><div className="source-head"><div><p className="eyebrow">AVAILABLE SOURCES</p><h2>Choose a stream.</h2><p className="muted">Select a provider release; availability can change.</p></div><span className="source-count">{releases.length} {releases.length === 1 ? 'source' : 'sources'}</span></div>{streams.loading ? <Status loading /> : streams.error ? <Status loading={false} error={streams.error} /> : releases.length ? <><div className="release-list">{releases.map((release, index) => <button className={selected === index ? 'release selected' : 'release'} key={index} onClick={() => setSelected(index)}><span className="radio-dot" /><span><b>{firstValue(release.label, release.sourceLabel, release.source, release.name, `Source ${index + 1}`)}</b><small>{firstValue(release.quality, release.resolution, release.format, 'Quality not listed')}</small></span><ChevronRight size={16} /></button>)}</div><button className="primary-button start-button" onClick={start} disabled={starting}>{starting ? <><LoaderCircle className="spin" size={16} /> Preparing stream…</> : <><Play size={16} fill="currentColor" /> Play selected source</>}</button>{error && <p className="inline-error"><CircleAlert size={15} /> {error}</p>}</> : <Status emptyTitle="No sources returned." emptyBody="This title has no playable releases right now." />}</section>;
+}
+function LegacyPlayerPage({ route, navigate }) {
+  const [playback, setPlayback] = useState(null); const [failed, setFailed] = useState(false); useEffect(() => { try { setPlayback(JSON.parse(sessionStorage.getItem('wellcinebox:playback') || 'null')); } catch { setPlayback(null); } }, []); if (!playback) return <main className="page-shell"><Status emptyTitle="Playback session not found." emptyBody="Choose a source from a title detail page to start watching." /></main>; const hasHeaders = playback.headers && Object.keys(playback.headers).length > 0;
+  return <main className="player-page"><div className="player-head"><button className="back-button" onClick={() => navigate(`/title/${encodeURIComponent(route.provider)}/${encodeURIComponent(route.id)}`)}><ArrowLeft size={17} /> Back to title</button><div><p className="eyebrow">{playback.sourceLabel || 'SOURCE'} <i /> {playback.provider || route.provider}</p><h1>{playback.title || 'Now playing'}</h1></div></div><div className="video-wrap">{failed ? <div className="video-failure"><CircleAlert size={35} /><h2>Playback could not start.</h2><p>The source returned a URL that this browser could not play. Try another quality or source.</p><button className="ghost-button" onClick={() => navigate(`/title/${encodeURIComponent(route.provider)}/${encodeURIComponent(route.id)}`)}>Choose another source</button></div> : <video controls autoPlay playsInline src={playback.url} onError={() => setFailed(true)}><track kind="captions" /></video>}</div>{hasHeaders && <div className="player-note"><Info size={17} /><span><b>Source note:</b> this browser player cannot attach custom request headers to an HTML5 video URL. If playback fails, return to the title and choose another source.</span></div>}<p className="muted player-caption">{playback.sourceLabel || 'Provider source'} · {playback.quality || 'Quality selected by source'}</p></main>;
+}
+function App() { const [route, navigate] = useRoute(); const [saved, setSaved] = useState(readSaved); useEffect(() => { localStorage.setItem('wellcinebox:saved', JSON.stringify(saved)); }, [saved]); const onSave = (item) => setSaved((current) => current.some((savedItem) => savedKey(savedItem) === savedKey(item)) ? current.filter((savedItem) => savedKey(savedItem) !== savedKey(item)) : [...current, item]); const onSearch = (query) => navigate(`/search?q=${encodeURIComponent(query)}&provider=all`); return <div className="app"><Header route={route} navigate={navigate} onSearch={onSearch} />{route.kind === 'home' && <Home navigate={navigate} saved={saved} onSave={onSave} />}{route.kind === 'search' && <SearchPage route={route} navigate={navigate} saved={saved} onSave={onSave} />}{route.kind === 'saved' && <SavedPage navigate={navigate} saved={saved} onSave={onSave} />}{route.kind === 'title' && <DetailPage route={route} navigate={navigate} saved={saved} onSave={onSave} />}{route.kind === 'play' && <PlayerPage route={route} navigate={navigate} />}<footer><Brand /><p>Stories worth staying in for.</p><span>API-powered discovery · Saved locally</span></footer></div>; }
+createRoot(document.getElementById('root')).render(<App />);

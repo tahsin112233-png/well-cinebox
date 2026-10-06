@@ -1,1 +1,1 @@
-{"routes":[{"path":"/","title":"Well Cinebox — Home"}]}
+{"routes":[{"path":"/","title":"Well Cinebox — Home"},{"path":"/search","title":"Search"},{"path":"/saved","title":"My list"},{"path":"/title/:provider/:id","title":"Title details"},{"path":"/play/:provider/:id","title":"Player"}]}
