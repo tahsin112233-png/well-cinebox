@@ -76,10 +76,10 @@ function App() {
       <button className="mobile-menu icon-btn" aria-label="Open menu" onClick={() => setMenuOpen(!menuOpen)}><Menu size={21}/></button>
       <Brand/>
       <nav className={`main-nav ${menuOpen ? 'nav-open' : ''}`} aria-label="Main navigation">
-        <button className="nav-link active" onClick={() => browse('For you')}><Compass size={16}/> Discover</button>
-        <button className="nav-link" onClick={() => browse('Films')}>Films</button>
-        <button className="nav-link" onClick={() => browse('Series')}>Series</button>
-        <button className="nav-link" onClick={() => browse('My List')}>My List <span className="list-count">{saved.length || ''}</span></button>
+        <button className={category === 'For you' ? 'nav-link active' : 'nav-link'} onClick={() => browse('For you')}><Compass size={16}/> Discover</button>
+        <button className={category === 'Films' ? 'nav-link active' : 'nav-link'} onClick={() => browse('Films')}>Films</button>
+        <button className={category === 'Series' ? 'nav-link active' : 'nav-link'} onClick={() => browse('Series')}>Series</button>
+        <button className={category === 'My List' ? 'nav-link active' : 'nav-link'} onClick={() => browse('My List')}>My List <span className="list-count">{saved.length || ''}</span></button>
       </nav>
       <div className="top-actions">
         <form className={`search-box ${searchOpen ? 'search-open' : ''}`} onSubmit={e => { e.preventDefault(); document.querySelector('.shelf')?.scrollIntoView({ behavior: 'smooth' }); }}>
