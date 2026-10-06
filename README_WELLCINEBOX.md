@@ -39,6 +39,8 @@ Only the providers already implemented and enabled in this fork are exposed. Pro
 
 ## Upstream updates
 
-`.github/workflows/sync-upstream.yml` checks upstream hourly at minute 17 and can be run manually. It merges conflict-free upstream changes into this fork; on a conflict it aborts without pushing, so maintainers can resolve the change deliberately.
+`.github/workflows/sync-upstream.yml` checks upstream hourly at minute 17 and can be run manually. It merges conflict-free upstream changes into this fork and pushes to `main`; on a conflict it aborts without pushing so maintainers can resolve the change deliberately.
 
-An upstream merge updates the GitHub fork, not the Manus project by itself. The separate Manus update handoff must import and build the compatible changes before the hosted app changes. A new Manus checkpoint only auto-deploys when the project's **Auto-publish** preference is enabled by its owner; otherwise publish the checkpoint through the dashboard. Never assume an upstream merge is already live.
+An enabled Manus GitHub event trigger watches commits on this fork’s `main` branch whose commit text contains `upstream/main` and whose author is `github-actions[bot]`. For a matching commit it imports the changes since the saved fork revision into the existing Manus project, while preserving Well Cinebox-owned frontend/API/deployment files. It runs the Rust and webapp checks, updates the saved revision, creates a Manus checkpoint, and requests publication. Patch conflicts, incompatible changes, or failed checks stop the handoff without overwriting the hosted project.
+
+The Manus project keeps `publishing.auto_publish` off unless its owner changes that preference. With it off, the event trigger submits an explicit publish request after each accepted checkpoint; the first or a later request may require owner confirmation. Enable Auto-publish in the Manus dashboard if checkpoint-triggered production deployment should proceed without an additional publish request. An upstream merge is not live until the Manus publication succeeds.
