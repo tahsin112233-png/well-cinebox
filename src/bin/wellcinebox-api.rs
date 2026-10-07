@@ -12,7 +12,11 @@ use moviebox_tui::providers::{
 use moviebox_tui::service::MovieBoxService;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+    net::SocketAddr,
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use tokio::sync::Semaphore;
 
 const MAX_PAGE: usize = 100;
@@ -275,6 +279,97 @@ async fn providers() -> impl IntoResponse {
     }))
 }
 
+fn year_from_unix_days(days_since_epoch: i64) -> i32 {
+    let shifted_days = days_since_epoch + 719_468;
+    let era = if shifted_days >= 0 {
+        shifted_days
+    } else {
+        shifted_days - 146_096
+    } / 146_097;
+    let day_of_era = shifted_days - era * 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let mut year = year_of_era + era * 400;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_part = (5 * day_of_year + 2) / 153;
+    let month = month_part + if month_part < 10 { 3 } else { -9 };
+    year += i64::from(month <= 2);
+    year as i32
+}
+
+fn current_utc_year() -> i32 {
+    let days = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        / 86_400;
+    year_from_unix_days(days as i64)
+}
+
+fn provider_home_query(provider: ProviderKind, year: i32) -> String {
+    if provider == ProviderKind::BdixCircleFtp {
+        // CircleFTP sorts its unfiltered posts newest-first at the provider API.
+        String::new()
+    } else {
+        year.to_string()
+    }
+}
+
+fn should_query_previous_year(provider: ProviderKind) -> bool {
+    matches!(provider, ProviderKind::FourKHdHub | ProviderKind::Dramachi)
+}
+
+fn catalog_year(item: &moviebox_tui::providers::CatalogItem) -> i32 {
+    item.year
+        .as_deref()
+        .and_then(|year| {
+            year.as_bytes()
+                .windows(4)
+                .find(|part| part.iter().all(u8::is_ascii_digit))
+                .and_then(|part| std::str::from_utf8(part).ok())
+                .and_then(|year| year.parse().ok())
+        })
+        .unwrap_or_default()
+}
+
+fn is_event_title_for_catalog(title: &str) -> bool {
+    const TERMS: &[&str] = &[
+        "wwe",
+        "ufc",
+        "mma",
+        "fifa",
+        "nfl",
+        "nba",
+        "mlb",
+        "nhl",
+        "cricket",
+        "wrestling",
+        "wrestlemania",
+        "boxing",
+        "formula 1",
+        "grand prix",
+        "super bowl",
+        "champions league",
+        "premier league",
+        "olympics",
+        "motogp",
+        "nascar",
+        "main event",
+        "awards",
+    ];
+    let normalized = format!(
+        " {} ",
+        title
+            .to_ascii_lowercase()
+            .chars()
+            .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { ' ' })
+            .collect::<String>()
+    );
+    TERMS
+        .iter()
+        .any(|term| normalized.contains(&format!(" {term} ")))
+}
+
 async fn home(
     State(state): State<Arc<AppState>>,
     Query(query): Query<HomeQuery>,
@@ -289,13 +384,39 @@ async fn home(
     let page = validate_page(query.page)?;
     let _permit = permit(&state).await?;
     if provider != ProviderKind::MovieBox {
+        let year = current_utc_year();
+        let search_query = provider_home_query(provider, year);
         let mut items = tokio::time::timeout(
             REQUEST_TIMEOUT,
-            state.service.search_typed(provider, "movie", page),
+            state.service.search_typed(provider, &search_query, page),
         )
         .await
         .map_err(|_| ApiError::internal("provider homepage request timed out"))?
         .map_err(|error| provider_error(provider, error))?;
+
+        if items.len() < 12 && should_query_previous_year(provider) {
+            let previous_year = (year - 1).to_string();
+            if let Ok(Ok(mut previous_items)) = tokio::time::timeout(
+                REQUEST_TIMEOUT,
+                state.service.search_typed(provider, &previous_year, page),
+            )
+            .await
+            {
+                let mut seen = items
+                    .iter()
+                    .map(|item| item.id.value.clone())
+                    .collect::<std::collections::HashSet<_>>();
+                previous_items.retain(|item| seen.insert(item.id.value.clone()));
+                items.extend(previous_items);
+            }
+        }
+
+        if provider == ProviderKind::FourKHdHub {
+            items.retain(|item| !is_event_title_for_catalog(&item.title));
+        }
+        if provider != ProviderKind::BdixCircleFtp {
+            items.sort_by_key(|item| std::cmp::Reverse(catalog_year(item)));
+        }
         items.truncate(60);
         return Ok(Json(HomeResponse {
             items,
@@ -578,6 +699,39 @@ mod tests {
         assert!(validate_page(Some(101)).is_err());
         assert!(validate_episode(Some(MAX_EPISODE + 1), "episode").is_err());
         assert!(validate_query("\n").is_err());
+    }
+
+    #[test]
+    fn current_year_feed_queries_are_provider_specific() {
+        assert_eq!(provider_home_query(ProviderKind::BdixCircleFtp, 2026), "");
+        assert_eq!(provider_home_query(ProviderKind::FourKHdHub, 2026), "2026");
+        assert_eq!(provider_home_query(ProviderKind::Dramachi, 2026), "2026");
+        assert!(should_query_previous_year(ProviderKind::FourKHdHub));
+        assert!(should_query_previous_year(ProviderKind::Dramachi));
+        assert!(!should_query_previous_year(ProviderKind::BdixDhakaFlix));
+    }
+
+    #[test]
+    fn homepage_omits_non_catalog_event_titles() {
+        assert!(is_event_title_for_catalog("WWE NXT Heatwave 2026"));
+        assert!(is_event_title_for_catalog("2026 FIFA World Cup"));
+        assert!(is_event_title_for_catalog("Sunday Night Main Event Replay"));
+        assert!(is_event_title_for_catalog(
+            "The Actor Awards 2026 Presented by SAG-AFTRA"
+        ));
+        assert!(!is_event_title_for_catalog(
+            "Gintama the Movie 2026: Yoshiwara in Flames"
+        ));
+        assert!(!is_event_title_for_catalog("Run Away 2026"));
+    }
+
+    #[test]
+    fn unix_day_conversion_tracks_gregorian_years() {
+        assert_eq!(year_from_unix_days(0), 1970);
+        assert_eq!(year_from_unix_days(10_957), 2000);
+        assert_eq!(year_from_unix_days(19_723), 2024);
+        assert_eq!(year_from_unix_days(20_454), 2026);
+        assert_eq!(year_from_unix_days(20_818), 2026);
     }
 
     #[test]
