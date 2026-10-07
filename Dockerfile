@@ -4,7 +4,9 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends build-essential ca-certificates pkg-config \
   && rm -rf /var/lib/apt/lists/*
 COPY . .
-RUN cargo build --release --locked --bin wellcinebox-api
+RUN CARGO_PROFILE_RELEASE_LTO=false \
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
+    cargo build --release --locked --bin wellcinebox-api
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
