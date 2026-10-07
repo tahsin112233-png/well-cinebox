@@ -574,7 +574,7 @@ async fn releases_for(
     season: usize,
     episode: usize,
 ) -> Result<Vec<Release>, ProviderError> {
-    match provider {
+    let mut releases = match provider {
         ProviderKind::MovieBox => service.client.episode_streams(id, season, episode).await,
         ProviderKind::FourKHdHub => {
             service
@@ -604,7 +604,14 @@ async fn releases_for(
         ProviderKind::Addons => Err(ProviderError::Unavailable(
             "addons are not an enabled API provider".to_string(),
         )),
-    }
+    }?;
+    releases.retain(|release| {
+        release
+            .mirrors
+            .iter()
+            .any(|mirror| mirror_is_playable(provider, mirror.direct_file, &mirror.resolver_url))
+    });
+    Ok(releases)
 }
 
 async fn resolve_playback(
@@ -626,16 +633,20 @@ async fn resolve_playback(
     let mirror = release
         .mirrors
         .iter()
-        .find(|mirror| {
-            mirror.resolver_url.starts_with("https://")
-                || mirror.resolver_url.starts_with("http://")
-        })
-        .ok_or_else(|| ProviderError::Unavailable("release has no playable URL".to_string()))?;
+        .find(|mirror| mirror_is_playable(provider, mirror.direct_file, &mirror.resolver_url))
+        .ok_or_else(|| {
+            ProviderError::Unavailable("release has no direct playable media mirror".to_string())
+        })?;
     Ok((
         mirror.resolver_url.clone(),
         mirror.headers.clone(),
         mirror.label.clone(),
     ))
+}
+
+fn mirror_is_playable(provider: ProviderKind, direct_file: bool, url: &str) -> bool {
+    let http_url = url.starts_with("https://") || url.starts_with("http://");
+    http_url && (direct_file || provider == ProviderKind::FourKHdHub)
 }
 
 fn provider_error(provider: ProviderKind, error: ProviderError) -> ApiError {
@@ -723,6 +734,35 @@ mod tests {
             "Gintama the Movie 2026: Yoshiwara in Flames"
         ));
         assert!(!is_event_title_for_catalog("Run Away 2026"));
+    }
+
+    #[test]
+    fn playback_uses_direct_media_or_the_supported_4k_resolver() {
+        assert!(!mirror_is_playable(
+            ProviderKind::MovieBox,
+            false,
+            "https://moviebox.example/resource"
+        ));
+        assert!(!mirror_is_playable(
+            ProviderKind::Dramachi,
+            false,
+            "https://dramachi.example/watch"
+        ));
+        assert!(mirror_is_playable(
+            ProviderKind::MovieBox,
+            true,
+            "https://cdn.example/video.m3u8"
+        ));
+        assert!(mirror_is_playable(
+            ProviderKind::FourKHdHub,
+            false,
+            "https://hubcloud.example/resolve"
+        ));
+        assert!(!mirror_is_playable(
+            ProviderKind::FourKHdHub,
+            false,
+            "javascript:alert(1)"
+        ));
     }
 
     #[test]
