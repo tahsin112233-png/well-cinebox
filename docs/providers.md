@@ -39,3 +39,7 @@ pub trait Provider: Send + Sync {
 ```
 
 New providers implement `Provider` (and optionally `ReleaseProvider` for multi-mirror streams), then register in `src/service.rs`. Responses are automatically cached as MessagePack envelopes.
+
+### MovieBox CDN Manifest Resolution
+
+MovieBox CDN stream entries parse signed `CloudFront-Policy` and `Edge-Cache-Cookie` tokens to find stream roots. The manifest resolver accepts only `/dash/` resources. Unhosted legacy `/hls/` cookie targets are dropped to prevent 404 failures during playback or downloads.

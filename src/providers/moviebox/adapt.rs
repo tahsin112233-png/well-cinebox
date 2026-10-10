@@ -572,7 +572,10 @@ pub fn is_deprecation_notice_url(url: &str) -> bool {
 
 fn to_dash_mpd(url_str: &str) -> Option<String> {
     let base = url_str.trim_end_matches('*').trim_end_matches('/');
-    if !base.is_empty() && (base.starts_with("http://") || base.starts_with("https://")) {
+    if !base.is_empty()
+        && (base.starts_with("http://") || base.starts_with("https://"))
+        && base.contains("/dash/")
+    {
         Some(format!("{base}/index.mpd"))
     } else {
         None
@@ -1101,6 +1104,8 @@ mod tests {
                 Some(expected)
             );
         }
+        let hls_cookie = "Edge-Cache-Cookie=urlprefix=aHR0cHM6Ly9zYmNkbjMuaGFrdW5heW1hdGF0YS5jb20vaGxzLzUyODM0MjAzNzkzODAzMzU1NzYtMS0xLTcyMC05NDYv:sign=9d668fe770e7d41d067f80422544d47e:t=1791308037";
+        assert_eq!(resolve_dash_manifest_from_policy(hls_cookie), None);
     }
 
     #[test]
@@ -1162,6 +1167,30 @@ mod tests {
             releases.is_empty(),
             "Deprecation notice MP4 must be rejected"
         );
+    }
+    #[test]
+    fn test_hls_signed_policy_rejected_as_dash_manifest() {
+        let payload = json!({
+            "code": 0,
+            "data": {
+                "title": "Shark: The Storm",
+                "displayResolutions": "720",
+                "streams": [
+                    {
+                        "id": "1886864337231398728",
+                        "format": "MP4",
+                        "codecName": "h264",
+                        "resolutions": "720",
+                        "size": "198337682",
+                        "duration": 1595,
+                        "url": "https://macdn.aoneroom.com/other/2026/09/04/b164fbfb4347792950bdfbfb563d39d9.mp4",
+                        "signCookie": "Edge-Cache-Cookie=urlprefix=aHR0cHM6Ly9zYmNkbjMuaGFrdW5heW1hdGF0YS5jb20vaGxzLzQwNDIzMTc5OTc2NzAyNDg1Ni0xLTEtNzIwLTk3NC8:sign=abc:t=1791308126"
+                    }
+                ]
+            }
+        });
+        let releases = moviebox_play_info_json_to_releases(&payload, 1, 1, "TestAgent/1.0");
+        assert!(releases.is_empty());
     }
 
     #[test]
