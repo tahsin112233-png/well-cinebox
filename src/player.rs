@@ -1184,12 +1184,19 @@ fn probe_mpv() -> Option<String> {
         candidates.push("/bin/mpv".to_string());
     }
 
-    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[cfg(target_os = "android")]
     {
         if let Ok(prefix) = std::env::var("PREFIX") {
             candidates.push(format!("{prefix}/bin/mpv"));
         }
         candidates.push("/data/data/com.termux/files/usr/bin/mpv".to_string());
+    }
+    #[cfg(target_os = "linux")]
+    {
+        candidates.push("/usr/bin/mpv".to_string());
+        candidates.push("/usr/local/bin/mpv".to_string());
+        candidates.push("/bin/mpv".to_string());
+        candidates.push("/run/current-system/sw/bin/mpv".to_string());
         if let Some(home) = dirs::home_dir() {
             candidates.push(
                 home.join(".local/share/flatpak/exports/bin/io.mpv.Mpv")
@@ -1206,11 +1213,11 @@ fn probe_mpv() -> Option<String> {
         candidates.push("/var/lib/flatpak/exports/bin/io.mpv.Mpv".to_string());
         candidates.push("/snap/bin/mpv".to_string());
         candidates.push("/var/lib/snapd/snap/bin/mpv".to_string());
-        candidates.push("/run/current-system/sw/bin/mpv".to_string());
-        candidates.push("/usr/bin/mpv".to_string());
-        candidates.push("/usr/local/bin/mpv".to_string());
-        candidates.push("/bin/mpv".to_string());
         candidates.push("/app/bin/mpv".to_string());
+        if let Ok(prefix) = std::env::var("PREFIX") {
+            candidates.push(format!("{prefix}/bin/mpv"));
+        }
+        candidates.push("/data/data/com.termux/files/usr/bin/mpv".to_string());
     }
     let bin_names = if cfg!(target_os = "windows") {
         &[
@@ -1270,12 +1277,19 @@ fn probe_vlc() -> Option<String> {
         candidates.push("/bin/vlc".to_string());
     }
 
-    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[cfg(target_os = "android")]
     {
         if let Ok(prefix) = std::env::var("PREFIX") {
             candidates.push(format!("{prefix}/bin/vlc"));
         }
         candidates.push("/data/data/com.termux/files/usr/bin/vlc".to_string());
+    }
+    #[cfg(target_os = "linux")]
+    {
+        candidates.push("/usr/bin/vlc".to_string());
+        candidates.push("/usr/local/bin/vlc".to_string());
+        candidates.push("/bin/vlc".to_string());
+        candidates.push("/run/current-system/sw/bin/vlc".to_string());
         if let Some(home) = dirs::home_dir() {
             candidates.push(
                 home.join(".local/share/flatpak/exports/bin/org.videolan.VLC")
@@ -1292,11 +1306,11 @@ fn probe_vlc() -> Option<String> {
         candidates.push("/var/lib/flatpak/exports/bin/org.videolan.VLC".to_string());
         candidates.push("/snap/bin/vlc".to_string());
         candidates.push("/var/lib/snapd/snap/bin/vlc".to_string());
-        candidates.push("/run/current-system/sw/bin/vlc".to_string());
-        candidates.push("/usr/bin/vlc".to_string());
-        candidates.push("/usr/local/bin/vlc".to_string());
-        candidates.push("/bin/vlc".to_string());
         candidates.push("/app/bin/vlc".to_string());
+        if let Ok(prefix) = std::env::var("PREFIX") {
+            candidates.push(format!("{prefix}/bin/vlc"));
+        }
+        candidates.push("/data/data/com.termux/files/usr/bin/vlc".to_string());
     }
     let bin_names = if cfg!(target_os = "windows") {
         &["vlc.exe", "vlc"][..]
