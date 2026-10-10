@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Fixed
+- **Media Playback & Subtitle Engine**:
+  - Reset legacy Android player defaults in graphical X11 and Wayland sessions so native Linux players take precedence over external Android intent dialogs.
+  - Prioritized native Linux media player paths over foreign container fallbacks on Linux systems and preserved dynamic auto-player resolution for unconfigured sessions.
 - **Providers & Stream Resolution**:
   - Filtered out unhosted MovieBox `/hls/` signed cookie targets in manifest resolution, which stops unplayable H.264 stream entries from failing with HTTP 404 during downloads or media playback.
 - **Download Engine & Batch Queue**:
